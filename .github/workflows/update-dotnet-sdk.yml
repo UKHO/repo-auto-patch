@@ -1,0 +1,303 @@
+name: update-dotnet-sdk
+
+on:
+  workflow_call:
+    inputs:
+      update-nuget-packages:
+        description: 'If true, the workflow will update any NuGet packages to their latest minor versions.'
+        required: false
+        type: boolean
+        default: true
+      include-nuget-packages:
+        description: 'A comma-separated list of NuGet package IDs (or substrings) to update, if update-nuget-packages is true.'
+        required: false
+        type: string
+        default: 'Microsoft.AspNetCore,Microsoft.EntityFrameworkCore,Microsoft.Extensions,System.Text.Json'
+      exclude-nuget-packages:
+        description: 'A comma-separated list of NuGet package IDs (or substrings) to not update if update-nuget-packages is true.'
+        required: false
+        type: string
+        default: ''
+      user-email:
+        description: 'The optional email address to use for the Git commits.'
+        required: false
+        type: string
+        default: 'github-actions[bot]@users.noreply.github.com'
+      user-name:
+        description: 'The optional user name to use for the Git commits.'
+        required: false
+        type: string
+        default: 'github-actions[bot]'
+      dry-run:
+        description: 'If true, the workflow will not push changes to GitHub.'
+        required: false
+        type: boolean
+        default: false
+      ado-organisation:
+        description: 'The organisation to use for the new work item.'
+        required: false
+        type: string
+        default: 'ukhydro'
+      ado-project:
+        description: 'The project to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu'
+      work-item-title:
+        description: 'The title to use for the new work item.'
+        required: false
+        type: string
+        default: ''
+      work-item-area-path:
+        description: 'The area to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu\Abzu Overall'
+      work-item-iteration-path:
+        description: 'The iteration to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu\Abzu Overall\Abzu Overall Kanban'
+      work-item-description:
+        description: 'The description for the new work item. The URL for the PR will be automatically added.'
+        required: false
+        type: string
+        default: ''
+      work-item-tags:
+        description: 'Tags for the new work item. Multiple tags can be added using a semicolon separated list.'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      branch-name:
+        description: 'The name of the Git branch associated with the Pull Request created by the workflow if the .NET SDK is updated.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.branch-name }}
+      pull-request-html-url:
+        description: 'The HTML URL of the Pull Request created by the workflow if the .NET SDK is updated.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.pull-request-html-url }}
+      pull-request-number:
+        description: 'The number of the Pull Request created by the workflow if the .NET SDK is updated.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.pull-request-number }}
+      sdk-updated:
+        description: 'Whether the .NET SDK was updated by the workflow.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.sdk-updated }}
+      sdk-version:
+        description: 'The latest version of the .NET SDK for the specified channel when the workflow completed.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.sdk-version }}
+      security:
+        description: 'Whether any .NET SDK update includes security fixes.'
+        value: ${{ jobs.update-dotnet-sdk-job.outputs.security }}
+    secrets:
+      ado-pat:
+        description: 'A PAT for creating a work item in Azure DevOps. Must have access to read and write work items.'
+        required: true
+
+env:
+  TERM: xterm
+
+jobs:
+  update-dotnet-sdk-job:
+    name: Update .NET SDK
+    runs-on: ubuntu-latest
+    # We don't want a fork of this repository to run this workflow.
+    if: ${{ github.event.repository.fork == false }}
+    outputs:
+      branch-name: ${{ steps.updateDotNetSdk.outputs.branch-name }}
+      pull-request-html-url: ${{ steps.updateDotNetSdk.outputs.pull-request-html-url }}
+      pull-request-number: ${{ steps.updateDotNetSdk.outputs.pull-request-number }}
+      sdk-updated: ${{ steps.updateDotNetSdk.outputs.sdk-updated }}
+      sdk-version: ${{ steps.updateDotNetSdk.outputs.sdk-version }}
+      security: ${{ steps.updateDotNetSdk.outputs.security }}
+
+    steps:
+    # Checkout the repository so the global.json file can be inspected and updated if a new patch version of the SDK is available.
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Look for exactly one global.json file.
+    - name: Find global.json
+      shell: pwsh
+      id: findGlobalJson
+      env:
+        BRANCH_NAME:  ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+        SKIP_PROCESSING: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING }}
+      run: |
+        $globalJsonCount = 0
+        $globalJsonFile = @()
+
+        foreach ($item in Get-ChildItem -Path global.json -Recurse) {
+          Write-Host Found $item
+          $globalJsonFile = $item
+          $globalJsonCount++
+        }
+
+        Write-Host $globalJsonCount file`(s`) found
+
+        if ($globalJsonCount -eq 0) {
+          Write-Host global.json file not found
+          exit 1
+        } elseif ($globalJsonCount -eq 1) {
+          Write-Host Using $globalJsonFile
+        } else {
+          Write-Host Multiple global.json files found
+          exit 1
+        }
+
+        Write-Output "GLOBAL_JSON_FILE=$($globalJsonFile)" >> $Env:GITHUB_OUTPUT
+
+    # Run the action to check if a new version of the .NET SDK is available for the same release channel as the SDK specified in global.json.
+    - name: Update .NET SDK
+      id: updateDotnetSdk
+      uses: martincostello/update-dotnet-sdk@ef5170e2dbee1235ee754f03a6018794c061c8e5 # v2.5.0
+      env:
+        GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+      with:
+        dry-run: ${{ inputs.dry-run }}
+        global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        user-email: ${{ inputs.user-email }}
+        user-name: ${{ inputs.user-name }}
+
+    # If the action updated the .NET SDK and there's a request to update the packages, install the .NET SDK.
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v3
+      if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
+      env:
+        GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+      with:
+        global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+
+    # If the action updated the .NET SDK and there's a request to update the packages, run the dotnet-outdated-tool against the input list of packges.
+    - name: Update NuGet packages
+      if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
+      shell: pwsh
+      env:
+        DOTNET_CLI_TELEMETRY_OPTOUT: true
+        DOTNET_NOLOGO: true
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION: 1
+        NUGET_XMLDOC_MODE: skip
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        dotnet tool install --global dotnet-outdated-tool
+
+        $tempPath = [System.IO.Path]::GetTempPath()
+        $updatesPath = (Join-Path $tempPath "dotnet-outdated.json")
+
+        Write-Host "Checking for .NET NuGet package(s) to update..."
+
+        # Check for packages to include/exclude.
+        $eligiblePackages = "${{ inputs.include-nuget-packages }}".Split(',')
+        $ineligiblePackages = "${{ inputs.exclude-nuget-packages }}".Split(',')
+        $includeExcludePackages = @()
+
+        if (![string]::IsNullOrEmpty($eligiblePackages)) {
+          foreach ($package in $eligiblePackages) {
+            $includeExcludePackages += "--include"
+            $includeExcludePackages += $package
+          }
+        }
+
+        if (![string]::IsNullOrEmpty($ineligiblePackages)) {
+          foreach ($package in $ineligiblePackages) {
+            $includeExcludePackages += "--exclude"
+            $includeExcludePackages += $package
+          }
+        }
+
+        $aggregatedUpdates = @()
+
+        # Run per project file, rather than for the full solution. This prevents errors if the solution contains an sqlproj, or if there are multiple solutions.
+        foreach ($project in Get-ChildItem -Path *.csproj -Recurse) {
+          if (Test-Path "$updatesPath") {
+            Remove-Item "$updatesPath"
+          }
+
+          Write-Host Processing $project
+          # Only update within the current major version.
+          dotnet outdated --upgrade --version-lock Major --output "$updatesPath" $includeExcludePackages "$project"
+
+          if (Test-Path "$updatesPath") {
+            $aggregatedUpdates = @($aggregatedUpdates; Get-Content -Path "$updatesPath" | ConvertFrom-Json)
+          }
+        }
+
+        # Determine the distinct set of package updates that were applied, if any.
+        $dependencies = @()
+
+        if ($aggregatedUpdates.Count -gt 0) {
+          $dependencies = `
+          $aggregatedUpdates | `
+          Select-Object -ExpandProperty projects | `
+          Select-Object -ExpandProperty TargetFrameworks | `
+          Select-Object -ExpandProperty Dependencies | `
+          Sort-Object -Property Name -Unique
+        }
+
+        if ($dependencies.Count -gt 0) {
+          Write-Host "Found $($dependencies.Count) .NET NuGet package(s) to update." -ForegroundColor Green
+
+          $commitMessageLines = @()
+
+          # Generate the commit message in a way that contains metadata similar to the way commit messages from dependabot updates are generated.
+          if ($dependencies.Count -eq 1) {
+            $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)"
+            $commitMessageLines += ""
+            $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)."
+          } else {
+            $commitMessageLines += "Bump .NET NuGet packages"
+            $commitMessageLines += ""
+            $commitMessageLines += "Bump .NET dependencies to their latest versions for the .NET ${{ steps.updateDotNetSdk.outputs.sdk-version }} SDK."
+            $commitMessageLines += ""
+            foreach ($dependency in $dependencies) {
+              $commitMessageLines += "Bump $($dependency.Name) from $($dependency.ResolvedVersion) to $($dependency.LatestVersion)."
+            }
+          }
+
+          $commitMessageLines += ""
+          $commitMessageLines += "---"
+          $commitMessageLines += "updated-dependencies:"
+
+          foreach ($dependency in $dependencies) {
+            $commitMessageLines += "- dependency-name: $($dependency.Name)"
+            $commitMessageLines += "  dependency-type: direct:production"
+            $commitMessageLines += "  update-type: version-update:semver-$($dependency.UpgradeSeverity.ToLowerInvariant())"
+          }
+
+          $commitMessageLines += "..."
+          $commitMessageLines += ""
+          $commitMessageLines += ""
+
+          $commitMessage = $commitMessageLines -join "`n"
+
+          git config user.email "${{ inputs.user-email }}"
+          git config user.name "${{ inputs.user-name }}"
+
+          git add .
+          git commit -m $commitMessage -s
+          git push
+
+          Write-Host "Pushed update to $($dependencies.Count) NuGet package(s)." -ForegroundColor Green
+        } else {
+          Write-Host "There are no .NET NuGet packages to update." -ForegroundColor Green
+        }
+
+  create-work-item-job:
+    name: Create work item
+    needs: update-dotnet-sdk-job
+    if: ${{ needs.update-dotnet-sdk-job.outputs.sdk-updated == 'true' }}
+    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v1
+    with:
+      pr-url: ${{ needs.update-dotnet-sdk-job.outputs.pull-request-html-url }}
+      ado-organisation: ${{ inputs.ado-organisation }}
+      ado-project: ${{ inputs.ado-project }}
+      work-item-title: ${{ inputs.work-item-title }}
+      work-item-area-path: ${{ inputs.work-item-area-path }}
+      work-item-iteration-path: ${{ inputs.work-item-iteration-path }}
+      work-item-description: ${{ inputs.ado-description }}
+      work-item-tags: ${{ inputs.work-item-tags }}
+    secrets:
+      ado-pat: ${{ secrets.ado-pat }}
