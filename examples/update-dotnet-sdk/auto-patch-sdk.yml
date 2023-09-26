@@ -1,0 +1,18 @@
+# Example script. Include in the project's .github/workflows folder.
+name: auto-patch-sdk
+
+on:
+  schedule:
+    - cron:  '00 21 * * TUE'
+  workflow_dispatch:
+
+jobs:
+  update-sdk:
+    uses: UKHO/repo-auto-patch/.github/workflows/update-dotnet-sdk.yml@v1
+    with:
+      include-nuget-packages: "System,Auto"
+      work-item-title: "HB SDK PBI Create Test"
+      work-item-description: "Review this PR."
+      work-item-tags: "Maritime Safety Information; TD2; Technical Debt"
+    secrets:
+      ado-pat: ${{ secrets.ADO_TOKEN }}
