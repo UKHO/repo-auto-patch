@@ -278,6 +278,7 @@ jobs:
           Write-Host "No updates found."
         }
 
+  # Create a work item.
   create-work-item-job:
     name: Create work item
     needs: update-dotnet-sdk-job

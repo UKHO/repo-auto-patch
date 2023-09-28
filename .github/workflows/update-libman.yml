@@ -177,94 +177,20 @@ jobs:
         echo 'pullRequestUrl' $pullRequestUrl
         echo 'PULL_REQUEST_URL='$pullRequestUrl >> $GITHUB_OUTPUT
 
-    # Create a work item.
-    - name: Create work item
-      shell: pwsh
-      id: createWorkItem
-      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' && steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'true' }}
-      run: |
-        # Get the various inputs required for creating the work item.
-        $pat = "${{ secrets.ado-pat }}"
-        $authenticationHeader = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($pat)")) }
-        $prUrl = "${{ steps.createPullRequest.outputs.PULL_REQUEST_URL }}"
-        $inputTitle = "${{ inputs.work-item-title }}"
-        $inputAreaPath = "${{ inputs.work-item-area-path }}"
-        $inputIterationPath = "${{ inputs.work-item-iteration-path }}"
-        $inputDescription = "${{ inputs.work-item-description }}"
-        $inputTags = "${{ inputs.work-item-tags }}"
-
-        # Set a default title if one wasn't supplied.
-        [string]$title
-
-        if ([string]::IsNullOrWhiteSpace($inputTitle)) {
-          $title = "PR created - " + $prUrl
-        } else {
-          $title = $inputTitle
-        }
-
-        # Create the description. Include a link to the PR.
-        $description = "<div>PR created - <a href=""" + $prUrl + """>" + $prUrl + "</a></div>"
-
-        if (![string]::IsNullOrWhiteSpace($inputDescription)) {
-          $description += "<div><br></div><div>" + $inputDescription + "</div>"
-        }
-
-        # Create the body of the request to set the various fields used to create the work item.
-        $body = @(
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Title"
-            "value" = "$title"
-          }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.State"
-            "value" = "Ready to Start"
-          }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Description"
-            "value" = "$description"
-          }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/Microsoft.VSTS.Common.AcceptanceCriteria"
-            "value" = "<div>Pipeline build and test is successful.</div>"
-          }
-        )
-
-        if (![string]::IsNullOrWhiteSpace($inputAreaPath)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.AreaPath"
-            "value" = "$inputAreaPath"
-            }
-        }
-
-        if (![string]::IsNullOrWhiteSpace($inputIterationPath)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.IterationPath"
-            "value" = "$inputIterationPath"
-            }
-        }
-
-        if (![string]::IsNullOrWhiteSpace($inputTags)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Tags"
-            "value" = "$inputTags"
-            }
-        }
-
-        # Conver the array to JSON, set the URI and execute the request.
-        $bodyJson = ConvertTo-Json -InputObject $body
-        $uri = "https://dev.azure.com/${{ inputs.ado-organisation }}/${{ inputs.ado-project }}/_apis/wit/workitems/`$user%20story?api-version=7.0"
-        $result = Invoke-RestMethod -Uri $uri -Method Post -Headers $authenticationHeader -ContentType "application/json-patch+json" -Body $bodyJson
+  # Create a work item.
+  create-work-item-job:
+    name: Create work item
+    needs: update-libman-job
+    if: ${{ needs.update-libman-job.outputs.update-skipped == 'false' }}
+    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v1
+    with:
+      pr-url: ${{ needs.update-libman-job.outputs.pull-request-url }}
+      ado-organisation: ${{ inputs.ado-organisation }}
+      ado-project: ${{ inputs.ado-project }}
+      work-item-title: ${{ inputs.work-item-title }}
+      work-item-area-path: ${{ inputs.work-item-area-path }}
+      work-item-iteration-path: ${{ inputs.work-item-iteration-path }}
+      work-item-description: ${{ inputs.ado-description }}
+      work-item-tags: ${{ inputs.work-item-tags }}
+    secrets:
+      ado-pat: ${{ secrets.ado-pat }}
