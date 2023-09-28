@@ -97,6 +97,6 @@ The following outputs are available:
 
 |Output                 |Description                                                                                                                             |
 |:----------------------|:---------------------------------------------------------------------------------------------------------------------------------------|
-|`updated-skipped`      |Whether or not (`true` or `false`) processing was skipped because no updates were found, or a branch for a previous update still exists.|
+|`update-skipped`       |Whether or not (`true` or `false`) processing was skipped because no updates were found, or a branch for a previous update still exists.|
 |`branch-name`          |The name of the new branch.                                                                                                             |
 |`pull-request-url`     |The URL of the PR, if created.                                                                                                          |
