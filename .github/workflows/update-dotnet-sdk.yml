@@ -99,7 +99,7 @@ jobs:
   update-dotnet-sdk-job:
     name: Update .NET SDK
     runs-on: ubuntu-latest
-    # We don't want a fork of this repository to run this workflow.
+    # Don't allow a fork to run this workflow.
     if: ${{ github.event.repository.fork == false }}
     outputs:
       branch-name: ${{ steps.updateDotNetSdk.outputs.branch-name }}

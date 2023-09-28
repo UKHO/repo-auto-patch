@@ -55,7 +55,7 @@ jobs:
   create-pr-work-item-job:
     name: Create work item in Azure DevOps
     runs-on: ubuntu-latest
-    # We don't want a fork of this repository to run this workflow.
+    # Don't allow a fork to run this workflow.
     if: ${{ github.event.repository.fork == false }}
 
     steps:

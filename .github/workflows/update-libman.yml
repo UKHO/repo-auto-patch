@@ -1,0 +1,270 @@
+name: update-libman
+
+on:
+  workflow_call:
+    inputs:
+      project-folder:
+        description: 'The path of the folder containing libman.json relative to the repository root.'
+        required: true
+        type: string
+      libraries:
+        description: 'A comma-separated list of libraries to update.'
+        required: true
+        type: string
+      user-email:
+        description: 'The optional email address to use for the Git commits.'
+        required: false
+        type: string
+        default: 'github-actions[bot]@users.noreply.github.com'
+      user-name:
+        description: 'The optional user name to use for the Git commits.'
+        required: false
+        type: string
+        default: 'github-actions[bot]'
+      ado-organisation:
+        description: 'The organisation to use for the new work item.'
+        required: false
+        type: string
+        default: 'ukhydro'
+      ado-project:
+        description: 'The project to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu'
+      work-item-title:
+        description: 'The title to use for the new work item.'
+        required: false
+        type: string
+        default: ''
+      work-item-area-path:
+        description: 'The area to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu\Abzu Overall'
+      work-item-iteration-path:
+        description: 'The iteration to use for the new work item.'
+        required: false
+        type: string
+        default: 'Abzu\Abzu Overall\Abzu Overall Kanban'
+      work-item-description:
+        description: 'The description for the new work item. The URL for the PR will be automatically added.'
+        required: false
+        type: string
+        default: ''
+      work-item-tags:
+        description: 'Tags for the new work item. Multiple tags can be added using a semicolon separated list.'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      branch-name:
+        description: 'The name of the Git branch associated with the Pull Request created by the workflow if the packages are updated.'
+        value: ${{ jobs.update-libman-job.outputs.branch-name }}
+      update-skipped:
+        description: 'Processing was skipped because the branch already existed, indicating that there is already an outstanding PR for updates, or there were no updates.'
+        value: ${{ jobs.update-libman-job.outputs.update-skipped }}
+      pull-request-url:
+        description: 'The URL of the Pull Request created by the workflow if the packages are updated.'
+        value: ${{ jobs.update-libman-job.outputs.pull-request-url }}
+    secrets:
+      ado-pat:
+        description: 'A PAT for creating a work item in Azure DevOps. Must have access to read and write work items.'
+        required: true
+
+env:
+  TERM: xterm
+
+jobs:
+  update-libman-job:
+    name: Update libaries controlled by LibMan
+    runs-on: 'ubuntu-latest'
+    # Don't allow a fork to run this workflow.
+    if: ${{ github.event.repository.fork == false }}
+
+    outputs:
+      branch-name: ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+      update-skipped: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING == 'true' || steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'false' }}
+      pull-request-url: ${{ steps.createPullRequest.outputs.PULL_REQUEST_URL }}
+
+    steps:
+    # Checkout the repository.
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    # If update branch already exists then skip subsequent steps.
+    - name: Check branch name
+      shell: pwsh
+      id: checkBranchName
+      run: |
+        $ErrorActionPreference = "Stop"
+        git fetch origin
+        $branchName = "libman-auto-patch"
+        $branchExists = git rev-parse --verify --quiet remotes/origin/$branchName
+
+        if ($branchExists) {
+          Write-Host "Branch already exists."
+          $branchExists = $true
+        } else {
+          Write-Host "No existing branch found."
+          $branchExists = $false
+        }
+
+        echo "BRANCH_NAME=$($branchName)" >> $Env:GITHUB_OUTPUT
+        echo "SKIP_PROCESSING=$($branchExists)" >> $Env:GITHUB_OUTPUT
+        exit 0
+
+    # Create a new branch.
+    - name: Create new branch
+      shell: pwsh
+      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        git checkout -b ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+
+    # Update the input list of libraries.
+    - name: Update LibMan libraries
+      shell: pwsh
+      id: updateLibManLibraries
+      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        $libraryUpdated = $false
+        $libraries = "${{ inputs.libraries }}".Split(',')
+        $projectFolder = "$Env:GITHUB_WORKSPACE${{ inputs.project-folder }}"
+
+        # Install LibMan.
+        dotnet tool install --global Microsoft.Web.LibraryManager.Cli
+
+        Write-Host "`nChecking $projectFolder."
+        cd "$projectFolder"
+
+        # Check each library for updates.
+        libman restore
+
+        foreach ($library in $libraries) {
+          Write-Host "`nChecking $library."
+          libman update $library
+        }
+
+        # Check if updates were made. If there are no files changed then git status will return no lines.
+        $lineCount = (git status -s).Count
+
+        if ($lineCount -gt 0) {
+          $libraryUpdated = $true
+          Write-Host "`nUpdates found."
+          git config user.email "${{ inputs.user-email }}"
+          git config user.name "${{ inputs.user-name }}"
+
+          git add .
+          git commit -m "LibMan auto patch" -s
+          git push --set-upstream origin ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+        } else {
+          Write-Host "`nNo updates found."
+        }
+
+        echo "LIBRARY_UPDATED=$($libraryUpdated)" >> $Env:GITHUB_OUTPUT
+
+    # Create a PR if there have been any updates.
+    - name: Create pull request
+      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' && steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'true' }}
+      id: createPullRequest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        pullRequestUrl="$(gh pr create --title 'LibMan library auto update' --body 'Created by update-libman')"
+        echo 'pullRequestUrl' $pullRequestUrl
+        echo 'PULL_REQUEST_URL='$pullRequestUrl >> $GITHUB_OUTPUT
+
+    # Create a work item.
+    - name: Create work item
+      shell: pwsh
+      id: createWorkItem
+      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' && steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'true' }}
+      run: |
+        # Get the various inputs required for creating the work item.
+        $pat = "${{ secrets.ado-pat }}"
+        $authenticationHeader = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($pat)")) }
+        $prUrl = "${{ steps.createPullRequest.outputs.PULL_REQUEST_URL }}"
+        $inputTitle = "${{ inputs.work-item-title }}"
+        $inputAreaPath = "${{ inputs.work-item-area-path }}"
+        $inputIterationPath = "${{ inputs.work-item-iteration-path }}"
+        $inputDescription = "${{ inputs.work-item-description }}"
+        $inputTags = "${{ inputs.work-item-tags }}"
+
+        # Set a default title if one wasn't supplied.
+        [string]$title
+
+        if ([string]::IsNullOrWhiteSpace($inputTitle)) {
+          $title = "PR created - " + $prUrl
+        } else {
+          $title = $inputTitle
+        }
+
+        # Create the description. Include a link to the PR.
+        $description = "<div>PR created - <a href=""" + $prUrl + """>" + $prUrl + "</a></div>"
+
+        if (![string]::IsNullOrWhiteSpace($inputDescription)) {
+          $description += "<div><br></div><div>" + $inputDescription + "</div>"
+        }
+
+        # Create the body of the request to set the various fields used to create the work item.
+        $body = @(
+          @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.Title"
+            "value" = "$title"
+          }
+          @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.State"
+            "value" = "Ready to Start"
+          }
+          @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.Description"
+            "value" = "$description"
+          }
+          @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/Microsoft.VSTS.Common.AcceptanceCriteria"
+            "value" = "<div>Pipeline build and test is successful.</div>"
+          }
+        )
+
+        if (![string]::IsNullOrWhiteSpace($inputAreaPath)) {
+          $body += @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.AreaPath"
+            "value" = "$inputAreaPath"
+            }
+        }
+
+        if (![string]::IsNullOrWhiteSpace($inputIterationPath)) {
+          $body += @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.IterationPath"
+            "value" = "$inputIterationPath"
+            }
+        }
+
+        if (![string]::IsNullOrWhiteSpace($inputTags)) {
+          $body += @{
+            "from" = "null"
+            "op" = "add"
+            "path" = "/fields/System.Tags"
+            "value" = "$inputTags"
+            }
+        }
+
+        # Conver the array to JSON, set the URI and execute the request.
+        $bodyJson = ConvertTo-Json -InputObject $body
+        $uri = "https://dev.azure.com/${{ inputs.ado-organisation }}/${{ inputs.ado-project }}/_apis/wit/workitems/`$user%20story?api-version=7.0"
+        $result = Invoke-RestMethod -Uri $uri -Method Post -Headers $authenticationHeader -ContentType "application/json-patch+json" -Body $bodyJson
