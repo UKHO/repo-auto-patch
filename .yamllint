@@ -1,0 +1,17 @@
+extends: default
+
+rules:
+  document-start: disable
+  line-length:
+    max: 150
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: false
+  brackets:
+    forbid: false
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+    min-spaces-inside-empty: -1
+    max-spaces-inside-empty: -1
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
