@@ -87,95 +87,95 @@ jobs:
       pull-request-url: ${{ steps.createPullRequest.outputs.PULL_REQUEST_URL }}
 
     steps:
-    # Checkout the repository.
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+      # Checkout the repository.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    # If update branch already exists then skip subsequent steps.
-    - name: Check branch name
-      shell: pwsh
-      id: checkBranchName
-      run: |
-        $ErrorActionPreference = "Stop"
-        git fetch origin
-        $branchName = "libman-auto-patch"
-        $branchExists = git rev-parse --verify --quiet remotes/origin/$branchName
+      # If update branch already exists then skip subsequent steps.
+      - name: Check branch name
+        shell: pwsh
+        id: checkBranchName
+        run: |
+          $ErrorActionPreference = "Stop"
+          git fetch origin
+          $branchName = "libman-auto-patch"
+          $branchExists = git rev-parse --verify --quiet remotes/origin/$branchName
 
-        if ($branchExists) {
-          Write-Host "Branch already exists."
-          $branchExists = $true
-        } else {
-          Write-Host "No existing branch found."
-          $branchExists = $false
-        }
+          if ($branchExists) {
+            Write-Host "Branch already exists."
+            $branchExists = $true
+          } else {
+            Write-Host "No existing branch found."
+            $branchExists = $false
+          }
 
-        echo "BRANCH_NAME=$($branchName)" >> $Env:GITHUB_OUTPUT
-        echo "SKIP_PROCESSING=$($branchExists)" >> $Env:GITHUB_OUTPUT
-        exit 0
+          echo "BRANCH_NAME=$($branchName)" >> $Env:GITHUB_OUTPUT
+          echo "SKIP_PROCESSING=$($branchExists)" >> $Env:GITHUB_OUTPUT
+          exit 0
 
-    # Create a new branch.
-    - name: Create new branch
-      shell: pwsh
-      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
-      run: |
-        $ErrorActionPreference = "Stop"
-        git checkout -b ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+      # Create a new branch.
+      - name: Create new branch
+        shell: pwsh
+        if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          git checkout -b ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
 
-    # Update the input list of libraries.
-    - name: Update LibMan libraries
-      shell: pwsh
-      id: updateLibManLibraries
-      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
-      run: |
-        $ErrorActionPreference = "Stop"
-        $libraryUpdated = $false
-        $libraries = "${{ inputs.libraries }}".Split(',')
-        $projectFolder = "$Env:GITHUB_WORKSPACE${{ inputs.project-folder }}"
+      # Update the input list of libraries.
+      - name: Update LibMan libraries
+        shell: pwsh
+        id: updateLibManLibraries
+        if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $libraryUpdated = $false
+          $libraries = "${{ inputs.libraries }}".Split(',')
+          $projectFolder = "$Env:GITHUB_WORKSPACE${{ inputs.project-folder }}"
 
-        # Install LibMan.
-        dotnet tool install --global Microsoft.Web.LibraryManager.Cli
+          # Install LibMan.
+          dotnet tool install --global Microsoft.Web.LibraryManager.Cli
 
-        Write-Host "`nChecking $projectFolder."
-        cd "$projectFolder"
+          Write-Host "`nChecking $projectFolder."
+          cd "$projectFolder"
 
-        # Check each library for updates.
-        libman restore
+          # Check each library for updates.
+          libman restore
 
-        foreach ($library in $libraries) {
-          Write-Host "`nChecking $library."
-          libman update $library
-        }
+          foreach ($library in $libraries) {
+            Write-Host "`nChecking $library."
+            libman update $library
+          }
 
-        # Check if updates were made. If there are no files changed then git status will return no lines.
-        $lineCount = (git status -s).Count
+          # Check if updates were made. If there are no files changed then git status will return no lines.
+          $lineCount = (git status -s).Count
 
-        if ($lineCount -gt 0) {
-          $libraryUpdated = $true
-          Write-Host "`nUpdates found."
-          git config user.email "${{ inputs.user-email }}"
-          git config user.name "${{ inputs.user-name }}"
+          if ($lineCount -gt 0) {
+            $libraryUpdated = $true
+            Write-Host "`nUpdates found."
+            git config user.email "${{ inputs.user-email }}"
+            git config user.name "${{ inputs.user-name }}"
 
-          git add .
-          git commit -m "LibMan auto patch" -s
-          git push --set-upstream origin ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
-        } else {
-          Write-Host "`nNo updates found."
-        }
+            git add .
+            git commit -m "LibMan auto patch" -s
+            git push --set-upstream origin ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+          } else {
+            Write-Host "`nNo updates found."
+          }
 
-        echo "LIBRARY_UPDATED=$($libraryUpdated)" >> $Env:GITHUB_OUTPUT
+          echo "LIBRARY_UPDATED=$($libraryUpdated)" >> $Env:GITHUB_OUTPUT
 
-    # Create a PR if there have been any updates.
-    - name: Create pull request
-      if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' && steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'true' }}
-      id: createPullRequest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        pullRequestUrl="$(gh pr create --title 'LibMan library auto update' --body 'Created by update-libman')"
-        echo 'pullRequestUrl' $pullRequestUrl
-        echo 'PULL_REQUEST_URL='$pullRequestUrl >> $GITHUB_OUTPUT
+      # Create a PR if there have been any updates.
+      - name: Create pull request
+        if: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING != 'true' && steps.updateLibManLibraries.outputs.LIBRARY_UPDATED == 'true' }}
+        id: createPullRequest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pullRequestUrl="$(gh pr create --title 'LibMan library auto update' --body 'Created by update-libman')"
+          echo 'pullRequestUrl' $pullRequestUrl
+          echo 'PULL_REQUEST_URL='$pullRequestUrl >> $GITHUB_OUTPUT
 
   # Create a work item.
   create-work-item-job:

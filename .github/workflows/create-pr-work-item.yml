@@ -59,104 +59,104 @@ jobs:
     if: ${{ github.event.repository.fork == false }}
 
     steps:
-    # Create a work item.
-    - name: Create work item
-      shell: pwsh
-      id: createWorkItem
-      run: |
-        # Get the various inputs required for creating the work item.
-        $pat = "${{ secrets.ado-pat }}"
-        $authenticationHeader = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($pat)")) }
-        $prUrl = "${{ inputs.pr-url }}"
-        $inputTitle = "${{ inputs.work-item-title }}"
-        $inputAreaPath = "${{ inputs.work-item-area-path }}"
-        $inputIterationPath = "${{ inputs.work-item-iteration-path }}"
-        $inputDescription = "${{ inputs.work-item-description }}"
-        $inputTags = "${{ inputs.work-item-tags }}"
+      # Create a work item.
+      - name: Create work item
+        shell: pwsh
+        id: createWorkItem
+        run: |
+          # Get the various inputs required for creating the work item.
+          $pat = "${{ secrets.ado-pat }}"
+          $authenticationHeader = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($pat)")) }
+          $prUrl = "${{ inputs.pr-url }}"
+          $inputTitle = "${{ inputs.work-item-title }}"
+          $inputAreaPath = "${{ inputs.work-item-area-path }}"
+          $inputIterationPath = "${{ inputs.work-item-iteration-path }}"
+          $inputDescription = "${{ inputs.work-item-description }}"
+          $inputTags = "${{ inputs.work-item-tags }}"
 
-        # Set a default title if one wasn't supplied.
-        [string]$title
+          # Set a default title if one wasn't supplied.
+          [string]$title
 
-        if ([string]::IsNullOrWhiteSpace($inputTitle)) {
-          $title = "PR created - " + $prUrl
-        } else {
-          $title = $inputTitle
-        }
-
-        # Create the description. Include a link to the PR.
-        $description = "<div>PR created - <a href=""" + $prUrl + """>" + $prUrl + "</a></div>"
-
-        if (![string]::IsNullOrWhiteSpace($inputDescription)) {
-          $description += "<div><br></div><div>" + $inputDescription + "</div>"
-        }
-
-        # Create the body of the request to set the various fields used to create the work item.
-        $body = @(
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Title"
-            "value" = "$title"
+          if ([string]::IsNullOrWhiteSpace($inputTitle)) {
+            $title = "PR created - " + $prUrl
+          } else {
+            $title = $inputTitle
           }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.State"
-            "value" = "Ready to Start"
+
+          # Create the description. Include a link to the PR.
+          $description = "<div>PR created - <a href=""" + $prUrl + """>" + $prUrl + "</a></div>"
+
+          if (![string]::IsNullOrWhiteSpace($inputDescription)) {
+            $description += "<div><br></div><div>" + $inputDescription + "</div>"
           }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Description"
-            "value" = "$description"
+
+          # Create the body of the request to set the various fields used to create the work item.
+          $body = @(
+            @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.Title"
+              "value" = "$title"
+            }
+            @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.State"
+              "value" = "Ready to Start"
+            }
+            @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.Description"
+              "value" = "$description"
+            }
+            @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/Microsoft.VSTS.Common.AcceptanceCriteria"
+              "value" = "<div>Pipeline build and test is successful.</div>"
+            }
+          )
+
+          if (![string]::IsNullOrWhiteSpace($inputAreaPath)) {
+            $body += @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.AreaPath"
+              "value" = "$inputAreaPath"
+            }
           }
-          @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/Microsoft.VSTS.Common.AcceptanceCriteria"
-            "value" = "<div>Pipeline build and test is successful.</div>"
+
+          if (![string]::IsNullOrWhiteSpace($inputIterationPath)) {
+            $body += @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.IterationPath"
+              "value" = "$inputIterationPath"
+            }
           }
-        )
 
-        if (![string]::IsNullOrWhiteSpace($inputAreaPath)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.AreaPath"
-            "value" = "$inputAreaPath"
+          if (![string]::IsNullOrWhiteSpace($inputTags)) {
+            $body += @{
+              "from" = "null"
+              "op" = "add"
+              "path" = "/fields/System.Tags"
+              "value" = "$inputTags"
+            }
           }
-        }
 
-        if (![string]::IsNullOrWhiteSpace($inputIterationPath)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.IterationPath"
-            "value" = "$inputIterationPath"
+          # Convert the array to JSON, set the URI and execute the request.
+          $bodyJson = ConvertTo-Json -InputObject $body
+          $uri = "https://dev.azure.com/${{ inputs.ado-organisation }}/${{ inputs.ado-project }}/_apis/wit/workitems/`$user%20story?api-version=7.0"
+          $result = Invoke-RestMethod -Uri $uri -Method Post -Headers $authenticationHeader -ContentType "application/json-patch+json" -Body $bodyJson -StatusCodeVariable 'statusCode'
+
+          if ($statusCode -ne 200) {
+            throw "Azure API call failed - status code " + $statusCode
           }
-        }
 
-        if (![string]::IsNullOrWhiteSpace($inputTags)) {
-          $body += @{
-            "from" = "null"
-            "op" = "add"
-            "path" = "/fields/System.Tags"
-            "value" = "$inputTags"
-          }
-        }
+          Write-Host 'Created work item' $result.id
+          Write-Host $result.url
 
-        # Conver the array to JSON, set the URI and execute the request.
-        $bodyJson = ConvertTo-Json -InputObject $body
-        $uri = "https://dev.azure.com/${{ inputs.ado-organisation }}/${{ inputs.ado-project }}/_apis/wit/workitems/`$user%20story?api-version=7.0"
-        $result = Invoke-RestMethod -Uri $uri -Method Post -Headers $authenticationHeader -ContentType "application/json-patch+json" -Body $bodyJson -StatusCodeVariable 'statusCode'
-
-        if ($statusCode -ne 200) {
-          throw "Azure API call failed - status code " + $statusCode
-        }
-
-        Write-Host 'Created work item' $result.id
-        Write-Host $result.url
-
-        Write-Output "## Work item $($result.id) created" >> $Env:GITHUB_STEP_SUMMARY
-        Write-Output "Details:" >> $Env:GITHUB_STEP_SUMMARY
-        Write-Output "$($result.url)" >> $Env:GITHUB_STEP_SUMMARY
+          Write-Output "## Work item $($result.id) created" >> $Env:GITHUB_STEP_SUMMARY
+          Write-Output "Details:" >> $Env:GITHUB_STEP_SUMMARY
+          Write-Output "$($result.url)" >> $Env:GITHUB_STEP_SUMMARY

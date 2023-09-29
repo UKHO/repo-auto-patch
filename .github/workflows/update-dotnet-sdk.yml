@@ -110,173 +110,173 @@ jobs:
       security: ${{ steps.updateDotNetSdk.outputs.security }}
 
     steps:
-    # Checkout the repository.
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+      # Checkout the repository.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    # Look for exactly one global.json file.
-    - name: Find global.json
-      shell: pwsh
-      id: findGlobalJson
-      env:
-        BRANCH_NAME:  ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
-        SKIP_PROCESSING: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING }}
-      run: |
-        $ErrorActionPreference = "Stop"
-        $globalJsonCount = 0
-        $globalJsonFile = @()
+      # Look for exactly one global.json file.
+      - name: Find global.json
+        shell: pwsh
+        id: findGlobalJson
+        env:
+          BRANCH_NAME: ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
+          SKIP_PROCESSING: ${{ steps.checkBranchName.outputs.SKIP_PROCESSING }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $globalJsonCount = 0
+          $globalJsonFile = @()
 
-        foreach ($item in Get-ChildItem -Path global.json -Recurse) {
-          Write-Host "Found $item."
-          $globalJsonFile = $item
-          $globalJsonCount++
-        }
-
-        Write-Host "$globalJsonCount file`(s`) found."
-
-        if ($globalJsonCount -eq 0) {
-          Write-Host "global.json file not found."
-          exit 1
-        } elseif ($globalJsonCount -eq 1) {
-          Write-Host "Using $globalJsonFile."
-        } else {
-          Write-Host "Multiple global.json files found."
-          exit 1
-        }
-
-        Write-Output "GLOBAL_JSON_FILE=$($globalJsonFile)" >> $Env:GITHUB_OUTPUT
-
-    # Run the action to check if a new version of the .NET SDK is available for the same release channel as the SDK specified in global.json.
-    - name: Update .NET SDK
-      id: updateDotnetSdk
-      uses: martincostello/update-dotnet-sdk@ef5170e2dbee1235ee754f03a6018794c061c8e5 # v2.5.0
-      env:
-        GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
-      with:
-        dry-run: ${{ inputs.dry-run }}
-        global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        user-email: ${{ inputs.user-email }}
-        user-name: ${{ inputs.user-name }}
-
-    # If the action updated the .NET SDK, and there's a request to update the packages, install the .NET SDK.
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v3
-      if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
-      env:
-        GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
-      with:
-        global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
-
-    # If the action updated the .NET SDK, and there's a request to update the packages, run the dotnet-outdated-tool against the input list of packges.
-    - name: Update NuGet packages
-      if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = "Stop"
-        $tempPath = [System.IO.Path]::GetTempPath()
-        $updatesPath = (Join-Path $tempPath "dotnet-outdated.json")
-
-        # Install dotnet-outdated.
-        dotnet tool install --global dotnet-outdated-tool
-
-        Write-Host "Checking for updates."
-
-        # Check for packages to include/exclude.
-        $eligiblePackages = "${{ inputs.include-nuget-packages }}".Split(',')
-        $ineligiblePackages = "${{ inputs.exclude-nuget-packages }}".Split(',')
-        $includeExcludePackages = @()
-
-        if (![string]::IsNullOrEmpty($eligiblePackages)) {
-          foreach ($package in $eligiblePackages) {
-            $includeExcludePackages += "--include"
-            $includeExcludePackages += $package
-          }
-        }
-
-        if (![string]::IsNullOrEmpty($ineligiblePackages)) {
-          foreach ($package in $ineligiblePackages) {
-            $includeExcludePackages += "--exclude"
-            $includeExcludePackages += $package
-          }
-        }
-
-        $aggregatedUpdates = @()
-
-        # Run per project file, rather than for the full solution. This prevents errors if the solution contains an sqlproj, or if there are multiple solutions.
-        foreach ($project in Get-ChildItem -Path *.csproj -Recurse) {
-          if (Test-Path "$updatesPath") {
-            Remove-Item "$updatesPath"
+          foreach ($item in Get-ChildItem -Path global.json -Recurse) {
+            Write-Host "Found $item."
+            $globalJsonFile = $item
+            $globalJsonCount++
           }
 
-          Write-Host "Processing $project."
-          # Only update within the current major version.
-          dotnet outdated --upgrade --version-lock Major --output "$updatesPath" $includeExcludePackages "$project"
+          Write-Host "$globalJsonCount file`(s`) found."
 
-          if (Test-Path "$updatesPath") {
-            $aggregatedUpdates = @($aggregatedUpdates; Get-Content -Path "$updatesPath" | ConvertFrom-Json)
-          }
-        }
-
-        # Determine the distinct set of package updates that were applied, if any.
-        $dependencies = @()
-
-        if ($aggregatedUpdates.Count -gt 0) {
-          $dependencies = `
-          $aggregatedUpdates | `
-          Select-Object -ExpandProperty projects | `
-          Select-Object -ExpandProperty TargetFrameworks | `
-          Select-Object -ExpandProperty Dependencies | `
-          Sort-Object -Property Name -Unique
-        }
-
-        if ($dependencies.Count -gt 0) {
-          Write-Host "Found $($dependencies.Count) updates."
-
-          $commitMessageLines = @()
-
-          # Generate the commit message in a way that contains metadata similar to the way commit messages from dependabot updates are generated.
-          if ($dependencies.Count -eq 1) {
-            $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)"
-            $commitMessageLines += ""
-            $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)."
+          if ($globalJsonCount -eq 0) {
+            Write-Host "global.json file not found."
+            exit 1
+          } elseif ($globalJsonCount -eq 1) {
+            Write-Host "Using $globalJsonFile."
           } else {
-            $commitMessageLines += "Bump .NET NuGet packages"
-            $commitMessageLines += ""
-            $commitMessageLines += "Bump .NET dependencies to their latest versions for the .NET ${{ steps.updateDotNetSdk.outputs.sdk-version }} SDK."
-            $commitMessageLines += ""
-            foreach ($dependency in $dependencies) {
-              $commitMessageLines += "Bump $($dependency.Name) from $($dependency.ResolvedVersion) to $($dependency.LatestVersion)."
+            Write-Host "Multiple global.json files found."
+            exit 1
+          }
+
+          Write-Output "GLOBAL_JSON_FILE=$($globalJsonFile)" >> $Env:GITHUB_OUTPUT
+
+      # Run the action to check if a new version of the .NET SDK is available for the same release channel as the SDK specified in global.json.
+      - name: Update .NET SDK
+        id: updateDotnetSdk
+        uses: martincostello/update-dotnet-sdk@ef5170e2dbee1235ee754f03a6018794c061c8e5 # v2.5.0
+        env:
+          GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+        with:
+          dry-run: ${{ inputs.dry-run }}
+          global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          user-email: ${{ inputs.user-email }}
+          user-name: ${{ inputs.user-name }}
+
+      # If the action updated the .NET SDK, and there's a request to update the packages, install the .NET SDK.
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
+        env:
+          GLOBAL_JSON_FILE: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+        with:
+          global-json-file: ${{ steps.findGlobalJson.outputs.GLOBAL_JSON_FILE }}
+
+      # If the action updated the .NET SDK, and there's a request to update the packages, run the dotnet-outdated-tool against the input list of packges.
+      - name: Update NuGet packages
+        if: ${{ inputs.update-nuget-packages && steps.updateDotNetSdk.outputs.sdk-updated == 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tempPath = [System.IO.Path]::GetTempPath()
+          $updatesPath = (Join-Path $tempPath "dotnet-outdated.json")
+
+          # Install dotnet-outdated.
+          dotnet tool install --global dotnet-outdated-tool
+
+          Write-Host "Checking for updates."
+
+          # Check for packages to include/exclude.
+          $eligiblePackages = "${{ inputs.include-nuget-packages }}".Split(',')
+          $ineligiblePackages = "${{ inputs.exclude-nuget-packages }}".Split(',')
+          $includeExcludePackages = @()
+
+          if (![string]::IsNullOrEmpty($eligiblePackages)) {
+            foreach ($package in $eligiblePackages) {
+              $includeExcludePackages += "--include"
+              $includeExcludePackages += $package
             }
           }
 
-          $commitMessageLines += ""
-          $commitMessageLines += "---"
-          $commitMessageLines += "updated-dependencies:"
-
-          foreach ($dependency in $dependencies) {
-            $commitMessageLines += "- dependency-name: $($dependency.Name)"
-            $commitMessageLines += "  dependency-type: direct:production"
-            $commitMessageLines += "  update-type: version-update:semver-$($dependency.UpgradeSeverity.ToLowerInvariant())"
+          if (![string]::IsNullOrEmpty($ineligiblePackages)) {
+            foreach ($package in $ineligiblePackages) {
+              $includeExcludePackages += "--exclude"
+              $includeExcludePackages += $package
+            }
           }
 
-          $commitMessageLines += "..."
-          $commitMessageLines += ""
-          $commitMessageLines += ""
+          $aggregatedUpdates = @()
 
-          $commitMessage = $commitMessageLines -join "`n"
+          # Run per project file, rather than for the full solution. This prevents errors if the solution contains an sqlproj, or if there are multiple solutions.
+          foreach ($project in Get-ChildItem -Path *.csproj -Recurse) {
+            if (Test-Path "$updatesPath") {
+              Remove-Item "$updatesPath"
+            }
 
-          git config user.email "${{ inputs.user-email }}"
-          git config user.name "${{ inputs.user-name }}"
+            Write-Host "Processing $project."
+            # Only update within the current major version.
+            dotnet outdated --upgrade --version-lock Major --output "$updatesPath" $includeExcludePackages "$project"
 
-          git add .
-          git commit -m $commitMessage -s
-          git push
-        } else {
-          Write-Host "No updates found."
-        }
+            if (Test-Path "$updatesPath") {
+              $aggregatedUpdates = @($aggregatedUpdates; Get-Content -Path "$updatesPath" | ConvertFrom-Json)
+            }
+          }
+
+          # Determine the distinct set of package updates that were applied, if any.
+          $dependencies = @()
+
+          if ($aggregatedUpdates.Count -gt 0) {
+            $dependencies = `
+            $aggregatedUpdates | `
+            Select-Object -ExpandProperty projects | `
+            Select-Object -ExpandProperty TargetFrameworks | `
+            Select-Object -ExpandProperty Dependencies | `
+            Sort-Object -Property Name -Unique
+          }
+
+          if ($dependencies.Count -gt 0) {
+            Write-Host "Found $($dependencies.Count) updates."
+
+            $commitMessageLines = @()
+
+            # Generate the commit message in a way that contains metadata similar to the way commit messages from dependabot updates are generated.
+            if ($dependencies.Count -eq 1) {
+              $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)"
+              $commitMessageLines += ""
+              $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)."
+            } else {
+              $commitMessageLines += "Bump .NET NuGet packages"
+              $commitMessageLines += ""
+              $commitMessageLines += "Bump .NET dependencies to their latest versions for the .NET ${{ steps.updateDotNetSdk.outputs.sdk-version }} SDK."
+              $commitMessageLines += ""
+              foreach ($dependency in $dependencies) {
+                $commitMessageLines += "Bump $($dependency.Name) from $($dependency.ResolvedVersion) to $($dependency.LatestVersion)."
+              }
+            }
+
+            $commitMessageLines += ""
+            $commitMessageLines += "---"
+            $commitMessageLines += "updated-dependencies:"
+
+            foreach ($dependency in $dependencies) {
+              $commitMessageLines += "- dependency-name: $($dependency.Name)"
+              $commitMessageLines += "  dependency-type: direct:production"
+              $commitMessageLines += "  update-type: version-update:semver-$($dependency.UpgradeSeverity.ToLowerInvariant())"
+            }
+
+            $commitMessageLines += "..."
+            $commitMessageLines += ""
+            $commitMessageLines += ""
+
+            $commitMessage = $commitMessageLines -join "`n"
+
+            git config user.email "${{ inputs.user-email }}"
+            git config user.name "${{ inputs.user-name }}"
+
+            git add .
+            git commit -m $commitMessage -s
+            git push
+          } else {
+            Write-Host "No updates found."
+          }
 
   # Create a work item.
   create-work-item-job:

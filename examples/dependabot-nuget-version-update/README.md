@@ -45,6 +45,6 @@ Ignore major version updates. In other words, limit updates to minor and patch v
     groups:
       all-packages:
         patterns:
-        - "*"
+          - "*"
 ```
 Group all updates together in a single PR, in a group called `all-packages`.
