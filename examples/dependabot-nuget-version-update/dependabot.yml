@@ -10,4 +10,4 @@ updates:
     groups:
       all-packages:
         patterns:
-        - "*"
+          - "*"

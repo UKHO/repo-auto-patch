@@ -1,17 +1,18 @@
 # Example script. Include in the project's .github/workflows folder.
-name: auto-patch-sdk
+name: auto-patch-libman
 
 on:
   schedule:
-    - cron: '00 21 * * TUE'
+    - cron: '00 10 * * FRI'
   workflow_dispatch:
 
 jobs:
-  update-sdk:
-    uses: UKHO/repo-auto-patch/.github/workflows/update-dotnet-sdk.yml@v1
+  update-libman:
+    uses: UKHO/repo-auto-patch/.github/workflows/update-libman.yml@v1
     with:
-      include-nuget-packages: "System,Auto"
-      work-item-title: "HB SDK PBI Create Test"
+      project-folder: "/DotNetUpdate/WebProject"
+      libraries: "jquery,Chart.js,epub.js"
+      work-item-title: "HB LibMan PBI Create Test"
       work-item-description: "Review this PR."
       work-item-tags: "Maritime Safety Information; TD2; Technical Debt"
     secrets:

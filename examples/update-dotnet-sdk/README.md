@@ -18,7 +18,7 @@ The name that will appear in the Actions tab for your repository.
 ```yaml
 on:
   schedule:
-    - cron:  '00 21 * * TUE'
+    - cron: '00 21 * * TUE'
   workflow_dispatch:
 ```
 The `schedule` event is used to trigger the action. In this example the action will run every Tuesday at 21:00.
