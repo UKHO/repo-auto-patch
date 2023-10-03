@@ -250,11 +250,9 @@ jobs:
             }
 
             $lines += ""
-            $lines += "| Package | From | To |"
-            $lines += "| --- | --- | --- |"
 
             foreach ($dependency in $dependencies) {
-              $lines += "| $($dependency.Name) | `$($dependency.ResolvedVersion)` | `$($dependency.LatestVersion)` |"
+              $lines += "Update $($dependency.Name) from $($dependency.ResolvedVersion) to $($dependency.LatestVersion)."
             }
 
             $lines += ""
