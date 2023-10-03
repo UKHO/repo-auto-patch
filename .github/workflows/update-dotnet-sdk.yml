@@ -235,38 +235,42 @@ jobs:
           if ($dependencies.Count -gt 0) {
             Write-Host "Found $($dependencies.Count) updates."
 
-            $commitMessageLines = @()
+            # Generate the commit message.
+            $lines = @()
 
-            # Generate the commit message in a way that contains metadata similar to the way commit messages from dependabot updates are generated.
             if ($dependencies.Count -eq 1) {
-              $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)"
-              $commitMessageLines += ""
-              $commitMessageLines += "Bump $($dependencies[0].Name) from $($dependencies[0].ResolvedVersion) to $($dependencies[0].LatestVersion)."
+              $lines += "Bump .NET NuGet packages with 1 update"
+              $lines += ""
+              $lines += "Bump .NET NuGet packages with 1 update:"
+
             } else {
-              $commitMessageLines += "Bump .NET NuGet packages"
-              $commitMessageLines += ""
-              $commitMessageLines += "Bump .NET dependencies to their latest versions for the .NET ${{ steps.updateDotNetSdk.outputs.sdk-version }} SDK."
-              $commitMessageLines += ""
-              foreach ($dependency in $dependencies) {
-                $commitMessageLines += "Bump $($dependency.Name) from $($dependency.ResolvedVersion) to $($dependency.LatestVersion)."
-              }
+              $lines += "Bump .NET NuGet packages with $($dependencies.Count) updates"
+              $lines += ""
+              $lines += "Bump .NET NuGet packages with $($dependencies.Count) updates:"
             }
 
-            $commitMessageLines += ""
-            $commitMessageLines += "---"
-            $commitMessageLines += "updated-dependencies:"
+            $lines += ""
+            $lines += "| Package | From | To |"
+            $lines += "| --- | --- | --- |"
 
             foreach ($dependency in $dependencies) {
-              $commitMessageLines += "- dependency-name: $($dependency.Name)"
-              $commitMessageLines += "  dependency-type: direct:production"
-              $commitMessageLines += "  update-type: version-update:semver-$($dependency.UpgradeSeverity.ToLowerInvariant())"
+              $lines += "| $($dependency.Name) | `$($dependency.ResolvedVersion)` | `$($dependency.LatestVersion)` |"
             }
 
-            $commitMessageLines += "..."
-            $commitMessageLines += ""
-            $commitMessageLines += ""
+            $lines += ""
+            $lines += "---"
+            $lines += "updated-dependencies:"
 
-            $commitMessage = $commitMessageLines -join "`n"
+            foreach ($dependency in $dependencies) {
+              $lines += "- dependency-name: $($dependency.Name)"
+              $lines += "  dependency-type: direct:production"
+              $lines += "  update-type: version-update:semver-$($dependency.UpgradeSeverity.ToLowerInvariant())"
+            }
+
+            $lines += "..."
+            $lines += ""
+
+            $commitMessage = $lines -join "`n"
 
             git config user.email "${{ inputs.user-email }}"
             git config user.name "${{ inputs.user-name }}"
