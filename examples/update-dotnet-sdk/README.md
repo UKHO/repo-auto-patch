@@ -3,6 +3,8 @@ This is an example workflow to show how to add a GitHub action to patch a reposi
 
 If, and only if, it finds an SDK update it can optionally update NuGet packages within the repository.
 
+This uses the [`Update .NET SDK`](https://github.com/marketplace/actions/update-net-sdk) action.
+
 ## How to use
 1. Create a folder in your repository called `.github/workflows`, if it doesn't already exist.
 2. Create a yaml workflow in the folder. You can call it whatever you want. For an example see [`auto-patch-sdk.yml`](auto-patch-sdk.yml).
@@ -57,10 +59,6 @@ This is the only section that may need to be updated per repository.
 - `user-email` and `user-name`
 
   Default `github-actions[bot]@users.noreply.github.com` and `github-actions[bot]` respectively. The email address and user name to be attached to the commits.
-
-- `dry-run`
-
-  Default `false`. Used for testing. If true the workflow will check for a new SDK version but not push any changes to GitHub.
 
 ### Outputs
 The following outputs are available:

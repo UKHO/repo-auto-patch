@@ -39,8 +39,6 @@ jobs:
   update-libman-job:
     name: Update libaries controlled by LibMan
     runs-on: 'ubuntu-latest'
-    # Don't allow a fork to run this workflow.
-    if: ${{ github.event.repository.fork == false }}
 
     outputs:
       branch-name: ${{ steps.checkBranchName.outputs.BRANCH_NAME }}
