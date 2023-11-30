@@ -1,5 +1,5 @@
 # Example Azure DevOps work item creation
-This is an example workflow used to create a work item in Azure DevOps. In this example it is triggered by the creation of a PR by Dependabot.
+This is an example workflow used to create a work item for a PR in Azure DevOps. In this example it is triggered by the creation of a PR by Dependabot.
 
 ## How to use
 1. Create a folder in your repository called `.github/workflows`, if it doesn't already exist.
@@ -27,7 +27,7 @@ The `pull_request` event is used to trigger the action on the creation of a PR. 
 jobs:
   create-work-item:
     if: ${{ github.actor == 'dependabot[bot]' }}
-    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v1
+    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v2
 ```
 Call the latest major version of the create work item workflow. The `if` statement here means that it will only be called if the PR was created by Dependabot.
 

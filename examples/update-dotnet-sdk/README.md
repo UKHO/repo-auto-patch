@@ -1,5 +1,5 @@
 # Add .NET SDK patching to a repository
-This is an example workflow to show how to add a GitHub action to patch a repository. This action can be scheduled to run and automatically pick up any minor version updates to the .NET SDK, based on the current value in the `global.json` file in your repository. If it finds an update it will generate a PR for it, and create a work item for the PR on Azure DevOps.
+This is an example workflow to show how to add a GitHub action to patch a repository. This action can be scheduled to run and automatically pick up any minor version updates to the .NET SDK, based on the current value in the `global.json` file in your repository. If it finds an update it will generate a PR for it.
 
 If, and only if, it finds an SDK update it can optionally update NuGet packages within the repository.
 
@@ -30,7 +30,7 @@ The `workflow_dispatch` event allows the action to be triggered on request, from
 ```yaml
 jobs:
   update-sdk:
-    uses: UKHO/repo-auto-patch/.github/workflows/update-dotnet-sdk.yml@v1
+    uses: UKHO/repo-auto-patch/.github/workflows/update-dotnet-sdk.yml@v2
 ```
 Call the latest major version of the update workflow.
 
@@ -61,42 +61,6 @@ This is the only section that may need to be updated per repository.
 - `dry-run`
 
   Default `false`. Used for testing. If true the workflow will check for a new SDK version but not push any changes to GitHub.
-
-- `ado-organisation`
-
-  Default `ukhydro`. The Azure DevOps organisation to use for the new work item.
-
-- `ado-project`
-
-  Default `Abzu`. The Azure DevOps project to use for the new work item
-
-- `work-item-title`
-
-  Default `PR created - [URL of PR]`. A title to use for the new work item.
-
-- `work-item-area-path`
-
-  Default `Abzu\Abzu Overall`. The area path for the new work item.
-
-- `work-item-iteration-path`
-
-  Default `Abzu\Abzu Overall\Abzu Overall Kanban`. The iteration path for the new work item.
-
-- `work-item-description`
-
-  Default `''`. A description for the new work item. Note that a link to the PR will always be added to the top of the description, even if the blank default is used.
-
-- `work-item-tags`
-
-  Default `''`. Tags to be added to the new work item, supplied as a semicolon seperated list.
-
----
-
-```yaml
-    secrets:
-      ado-pat: ${{ secrets.ADO_TOKEN }}
-```
-Mandatory field, used to authorise the creation of a new work item in Azure DevOps. This is an Azure DevOps PAT stored as a repository secret called ADO_TOKEN. This PAT must have work item read and write access.
 
 ### Outputs
 The following outputs are available:

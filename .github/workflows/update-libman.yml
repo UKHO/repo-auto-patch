@@ -21,41 +21,6 @@ on:
         required: false
         type: string
         default: 'github-actions[bot]'
-      ado-organisation:
-        description: 'The organisation to use for the new work item.'
-        required: false
-        type: string
-        default: 'ukhydro'
-      ado-project:
-        description: 'The project to use for the new work item.'
-        required: false
-        type: string
-        default: 'Abzu'
-      work-item-title:
-        description: 'The title to use for the new work item.'
-        required: false
-        type: string
-        default: ''
-      work-item-area-path:
-        description: 'The area to use for the new work item.'
-        required: false
-        type: string
-        default: 'Abzu\Abzu Overall'
-      work-item-iteration-path:
-        description: 'The iteration to use for the new work item.'
-        required: false
-        type: string
-        default: 'Abzu\Abzu Overall\Abzu Overall Kanban'
-      work-item-description:
-        description: 'The description for the new work item. The URL for the PR will be automatically added.'
-        required: false
-        type: string
-        default: ''
-      work-item-tags:
-        description: 'Tags for the new work item. Multiple tags can be added using a semicolon separated list.'
-        required: false
-        type: string
-        default: ''
     outputs:
       branch-name:
         description: 'The name of the Git branch associated with the Pull Request created by the workflow if the packages are updated.'
@@ -66,10 +31,6 @@ on:
       pull-request-url:
         description: 'The URL of the Pull Request created by the workflow if the packages are updated.'
         value: ${{ jobs.update-libman-job.outputs.pull-request-url }}
-    secrets:
-      ado-pat:
-        description: 'A PAT for creating a work item in Azure DevOps. Must have access to read and write work items.'
-        required: true
 
 env:
   TERM: xterm
@@ -176,21 +137,3 @@ jobs:
           pullRequestUrl="$(gh pr create --title 'LibMan library auto update' --body 'Created by update-libman')"
           echo 'pullRequestUrl' $pullRequestUrl
           echo 'PULL_REQUEST_URL='$pullRequestUrl >> $GITHUB_OUTPUT
-
-  # Create a work item.
-  create-work-item-job:
-    name: Create work item
-    needs: update-libman-job
-    if: ${{ needs.update-libman-job.outputs.update-skipped == 'false' }}
-    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v1
-    with:
-      pr-url: ${{ needs.update-libman-job.outputs.pull-request-url }}
-      ado-organisation: ${{ inputs.ado-organisation }}
-      ado-project: ${{ inputs.ado-project }}
-      work-item-title: ${{ inputs.work-item-title }}
-      work-item-area-path: ${{ inputs.work-item-area-path }}
-      work-item-iteration-path: ${{ inputs.work-item-iteration-path }}
-      work-item-description: ${{ inputs.ado-description }}
-      work-item-tags: ${{ inputs.work-item-tags }}
-    secrets:
-      ado-pat: ${{ secrets.ado-pat }}

@@ -8,7 +8,7 @@ on:
 jobs:
   create-work-item:
     if: ${{ github.actor == 'dependabot[bot]' }}
-    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v1
+    uses: UKHO/repo-auto-patch/.github/workflows/create-pr-work-item.yml@v2
     with:
       pr-url: ${{ github.event.pull_request.html_url }}
       work-item-title: "HB Dependabot PBI Create Test"
